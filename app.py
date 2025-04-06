@@ -12,7 +12,8 @@ logging.basicConfig(
     level=logging.DEBUG,  # Changed from INFO to DEBUG
     format='%(asctime)s %(levelname)s %(message)s',
     handlers=[
-        logging.StreamHandler()
+        logging.StreamHandler(),
+        logging.FileHandler("logging.log")
     ]
 )
 

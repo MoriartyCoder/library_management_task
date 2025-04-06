@@ -31,3 +31,29 @@ python app.py
 ```bash
 http://localhost:5000 # Most probably
 ```
+
+# Assignments
+
+## Nr 1
+### Discuss with the client about potential improvements, features, and data requirements for managing their library effectively.
+
+Potential improvements:
+* Switch from xml-files to a DBS
+* Generate the description only once. When adding book.
+* Search with parameters
+* Implementation of cccounts
+* User:
+    * List of borrowed books
+    * recommendations
+* Staff:
+    * Adding books, authors, publisher, genre
+    * Login for staff to see confidential data
+    * Page for overdue books
+
+
+Features: 
+* Filters (state of the book, auther, publisher, genre)
+* New read-later-list
+
+Data requirement:
+![image](Ass1.png)
