@@ -1,0 +1,19 @@
+services:
+  postgres:
+    container_name: postgres-cont
+    image: postgres
+    hostname: localhost
+    ports: 
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: 1234
+      POSTGRES_DB: lib_mgmt
+    volumes:
+      - ./db_files:/root/db_files
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+
