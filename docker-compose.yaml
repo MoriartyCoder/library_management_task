@@ -1,10 +1,10 @@
 services:
   postgres:
-    container_name: postgres-cont
+    container_name: pg-cont
     image: postgres
     hostname: localhost
     ports: 
-      - "5432:5432"
+      - "5400:5432"
     environment:
       POSTGRES_USER: admin
       POSTGRES_PASSWORD: 1234
@@ -13,6 +13,19 @@ services:
       - ./db_files:/root/db_files
       - postgres_data:/var/lib/postgresql/data
     restart: unless-stopped
+
+
+#  pgadmin:
+#    container_name: pgadmin-cont
+#    image: dpage/pgadmin4
+#    depends_on:
+#      - postgres
+#    ports:
+#      - "5050:80"
+#    environment:
+#      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+#      PGADMIN_DEFAULT_PASSWORD: root
+#    restart: unless-stopped
 
 volumes:
   postgres_data:

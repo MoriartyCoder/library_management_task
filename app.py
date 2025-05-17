@@ -4,6 +4,9 @@ import requests
 import logging
 from flask_cors import CORS
 
+from psycopg2.extras import RealDictCursor
+from helper import query
+
 app = Flask(__name__, static_url_path='/static', static_folder='static')
 CORS(app)
 
@@ -119,6 +122,40 @@ def get_description():
     except Exception as e:
         logging.exception(f"Unexpected error: {e}")
         return jsonify({'error': 'An unexpected error occurred', 'message': str(e)}), 500
+
+
+@app.route('/api/books')
+def get_books():
+    return query("SELECT * FROM book;")
+
+@app.route('/api/list')
+def get_book_table_list():
+    return query("""SELECT
+                    b.book_id AS "Book ID",
+                    b.book_id,
+                    b.title AS "Title",
+                    a.author_id,
+                    a.name AS "Author",
+                    p.publisher_id,
+                    p.name AS "Publisher",
+                    g.genre_id,
+                    g.name AS "Genre",
+                    u.user_id,
+                    u.name AS "Borrower",
+                    br.borrow_date AS "Borrow Date",
+                    br.due_date AS "Return Date",
+                    s.name AS "State"
+                    FROM Book b
+                    JOIN Author a ON b.author_id = a.author_id
+                    JOIN Publisher p ON b.publisher_id = p.publisher_id
+                    JOIN Genre g ON b.genre_id = g.genre_id
+                    JOIN State s ON b.state_id = s.state_id
+                    LEFT JOIN Borrowed br ON b.book_id = br.book_id
+                    LEFT JOIN "User" u ON br.user_id = u.user_id
+                    ORDER BY b.book_id;
+                    """)
+
+
 
 if __name__ == '__main__':
     app.run(debug=True)

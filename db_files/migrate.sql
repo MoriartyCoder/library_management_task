@@ -28,5 +28,13 @@ INSERT INTO "User" (name) VALUES
 ('Alice'),
 ('Bob');
 
+INSERT INTO Book (title, author_id, publisher_id, genre_id, state_id) VALUES
+('1984', 1, 1, 1, 1),
+('To Kill a Mockingbird', 2, 2, 1, 1),
+('Pride and Prejudice', 3, 3, 3, 1),
+('Animal Farm', 1, 4, 4, 1),
+('Ikigai', 4, 5, 5, 1);
+
+
 -- INSERT INTO Borrowed (book_id, user_id, borrow_date, due_date) VALUES
 -- (1, 1, '2024-03-01', '2024-03-21');

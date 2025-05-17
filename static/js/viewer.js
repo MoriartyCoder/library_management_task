@@ -2,8 +2,9 @@
 
 window.onload = function () {
     const params = getQueryParams();
-    const file = params['file'];
-    const id = params['id'];
+    const file = params['table'];
+    const id_name = params['id_name'];
+    const id_value = params['id_value'];
 
     if (file && id) {
         displayEntity(file, id);

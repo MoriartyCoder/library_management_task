@@ -1,59 +1,119 @@
-
-
 window.onload = function () {
+    // Fetch all XML data concurrently
     Promise.all([
-        fetch('/api/list').then(response => response.json()),
-        fetch('/api/books').then(response => response.json())
-    ]).then(([tableData, books]) => {
+        fetch('/static/data/authors.xml').then(response => response.text()),
+        fetch('/static/data/publishers.xml').then(response => response.text()),
+        fetch('/static/data/books.xml').then(response => response.text()),
+        fetch('/static/data/genres.xml').then(response => response.text()) // Fetch genres.xml
+    ]).then(([authorsData, publishersData, booksData, genresData]) => {
+        const parser = new DOMParser();
 
+        // Parse authors.xml
+        const authorsDoc = parser.parseFromString(authorsData, "application/xml");
+        const authors = {};
+        const authorsList = authorsDoc.getElementsByTagName('Author');
+        for (let i = 0; i < authorsList.length; i++) {
+            const author = authorsList[i];
+            const id = author.getAttribute('id');
+            const name = author.getElementsByTagName('Name')[0].textContent;
+            authors[id] = name;
+        }
+
+        // Parse publishers.xml
+        const publishersDoc = parser.parseFromString(publishersData, "application/xml");
+        const publishers = {};
+        const publishersList = publishersDoc.getElementsByTagName('Publisher');
+        for (let i = 0; i < publishersList.length; i++) {
+            const publisher = publishersList[i];
+            const id = publisher.getAttribute('id');
+            const name = publisher.getElementsByTagName('Name')[0].textContent;
+            publishers[id] = name;
+        }
+
+        // Parse genres.xml
+        const genresDoc = parser.parseFromString(genresData, "application/xml");
+        const genres = {};
+        const genresList = genresDoc.getElementsByTagName('Genre');
+        for (let i = 0; i < genresList.length; i++) {
+            const genre = genresList[i];
+            const id = genre.getAttribute('id');
+            const name = genre.getElementsByTagName('Name')[0].textContent;
+            genres[id] = name;
+        }
+
+        // Parse books.xml
+        const booksDoc = parser.parseFromString(booksData, "application/xml");
+        const books = booksDoc.getElementsByTagName('Book');
         const bookTable = document.getElementById('book-table');
         const borrowBookSelect = document.getElementById('borrowBookId');
         const returnBookSelect = document.getElementById('returnBookId');
+
+        // Retrieve borrowing data from LocalStorage
+        const borrowingData = JSON.parse(localStorage.getItem('borrowingData')) || {};
 
         // Clear existing options
         borrowBookSelect.innerHTML = '<option value="">Select a Book</option>';
         returnBookSelect.innerHTML = '<option value="">Select a Book</option>';
 
-        tableData.forEach(book => {
-            const book_id = book["Book ID"];
-            const title = book["Title"];
-            const author = book["Author"];
-            const publisher = book["Publisher"];
-            const genre = book["Genre"];
-            const borrower = book["Borrower"] || '';
-            const borrowDate = book["Borrow Date"] || '';
-            const returnDate = book["Return Date"] || '';
-            const state = book["State"];
+        for (let i = 0; i < books.length; i++) {
+            const book = books[i];
+            const id = book.getAttribute('id');
+            const title = book.getElementsByTagName('Title')[0].textContent;
 
-            const isBorrowed = borrower !== '' && borrowDate !== '';
+            // Fetch Author
+            const authorElement = book.getElementsByTagName('Author')[0];
+            const authorHref = authorElement.getAttribute('xlink:href');
+            const authorId = authorHref.split('#')[1];
+            const authorName = authors[authorId] || 'Unknown';
 
-            // Create table row
+            // Fetch Publisher
+            const publisherElement = book.getElementsByTagName('Publisher')[0];
+            const publisherHref = publisherElement.getAttribute('xlink:href');
+            const publisherId = publisherHref.split('#')[1];
+            const publisherName = publishers[publisherId] || 'Unknown';
+
+            // Fetch Genre
+            const genreElement = book.getElementsByTagName('Genre')[0];
+            const genreHref = genreElement.getAttribute('xlink:href');
+            const genreId = genreHref.split('#')[1];
+            const genreName = genres[genreId] || 'Unknown';
+
+            // Create table row for each book
             const row = document.createElement('tr');
-            row.setAttribute('book-id', book_id);
-            row.innerHTML = `<td>${book_id}</td>
-                             <td><a href="viewer.html?table=book&id_name=book_id&id=${book_id}" target="_blank">${title}</td>
-                             <td><a href="viewer.html?table=book&id_name=book_id&id=${book_id}" target="_blank">${author}</td>
-                             <td><a href="viewer.html?table=publisher&id_name=book_id&id=${book_id}" target="_blank">${publisher}</td>
-                             <td><a href="viewer.html?table=genre&id_name=book_id&id=${book_id}" target="_blank">${genre}</td>
-                             <td><a href="viewer.html?table=book&id_name=book_id&id=${book_id}" target="_blank">${borrower}</td>
-                             <td>${borrowDate}</td>
-                             <td>${returnDate}</td>
-                             <td>${state}</td>`;
+            row.setAttribute('data-id', id);
+
+            // Check if book is borrowed
+            const isBorrowed = borrowingData[id] ? true : false;
+
+            // Populate row with book details, including genre
+            row.innerHTML = `<td>${id}</td>
+                             <td><a href="viewer.html?file=books.xml&id=${id}" target="_blank">${title}</a></td>
+                             <td><a href="viewer.html?file=authors.xml&id=${authorId}" target="_blank">${authorName}</a></td>
+                             <td><a href="viewer.html?file=publishers.xml&id=${publisherId}" target="_blank">${publisherName}</a></td>
+                             <td><a href="viewer.html?file=genres.xml&id=${genreId}" target="_blank">${genreName}</a></td>
+                             <td>${isBorrowed ? borrowingData[id].borrowerName : ''}</td>
+                             <td>${isBorrowed ? borrowingData[id].borrowDate : ''}</td>
+                             <td>${isBorrowed ? borrowingData[id].returnDate : ''}</td>
+                             <td>${isBorrowed ? 'Borrowed' : 'Present'}</td>`;
             bookTable.appendChild(row);
 
-            // Populate dropdowns
-            const option = document.createElement('option');
-            option.value = book_id;
-            option.textContent = `${book_id} - ${title}`;
-
+            // Populate the appropriate dropdown
             if (!isBorrowed) {
+                // Add book to Borrow dropdown
+                const option = document.createElement('option');
+                option.value = id;
+                option.textContent = `${id} - ${title}`;
                 borrowBookSelect.appendChild(option);
             } else {
-                returnBookSelect.appendChild(option);
+                // Add book to Return dropdown
+                const returnOption = document.createElement('option');
+                returnOption.value = id;
+                returnOption.textContent = `${id} - ${title}`;
+                returnBookSelect.appendChild(returnOption);
             }
-        });
+        }
     }).catch(error => {
-        console.error('Error fetching or parsing data from server:', error);
+        console.error('Error fetching or parsing XML files:', error);
     });
 };
 
@@ -74,7 +134,7 @@ document.getElementById('borrowForm').addEventListener('submit', function (event
         return;
     }
 
-    const row = document.querySelector(`#book-table tr[book-id="${bookId}"]`);
+    const row = document.querySelector(`#book-table tr[data-id="${bookId}"]`);
     if (row) {
         const currentState = row.cells[8].textContent;
         if (currentState === 'Borrowed') {
@@ -140,7 +200,7 @@ document.getElementById('returnForm').addEventListener('submit', function (event
         return;
     }
 
-    const row = document.querySelector(`#book-table tr[book-id="${bookId}"]`);
+    const row = document.querySelector(`#book-table tr[data-id="${bookId}"]`);
     if (row) {
         const currentState = row.cells[8].textContent;
         if (currentState !== 'Borrowed') {

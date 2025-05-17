@@ -8,17 +8,21 @@ docker-compose up -d --build
 
 ## Enter container
 ```
-docker exec -it postgres-cont bash
+docker exec -it pg-cont bash
 ```
 
 ## Stop container
 ```
-docker stop postgres-cont
+docker stop pg-cont
 ```
 
 ## Remove container and volume
 ```
-docker rm postgres-cont; docker volume rm db_files_postgres_data
+docker rm pg-cont; docker volume rm db_files_postgres_data
+```
+### Remove while shutdown
+```
+docker-compose down -v
 ```
 
 ## Status of containers
@@ -39,9 +43,9 @@ docker volume ls
 psql -U <user> -d <DB> -f <file>
 ```
 
-### Read schema
+### Read setup
 ```
-psql -U admin -d lib_mgmt -f schema.sql
+psql -U admin -d lib_mgmt -f setup.sql
 ```
 
 
