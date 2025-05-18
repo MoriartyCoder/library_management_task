@@ -155,13 +155,62 @@ def get_from_table():
     sql = f"SELECT * FROM {table} WHERE {pk_name} = {pk_value};"
     return query(sql)
 
+@app.route('/api/get_detail_view', methods=['GET'])
+def get_detail_view():
+    table = request.args.get("table").lower()
+    pk_name = request.args.get("pk_name").lower()
+    pk_value = int(request.args.get("pk_value"))
+    try:
+        pk_value = int(request.args.get("pk_value"))
+    except Exception as e:
+        return jsonify({'error': "The primary key must be an int!"}), 500
+
+    if table == "user":
+        table = '"User"'
+
+    if table not in TABLES:
+        return jsonify({'error': "Table not found!"}), 500
+    
+    sql = f"""
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_name = '{table}'
+            AND table_schema = 'public';
+            """
+
+    table_cols = query(sql)
+
+    selections = []
+    joins = []
+    for col in table_cols:
+        col_name = col["column_name"]
+        col_name_shortend = col_name.replace("_id", "")
+        _col_name_shortend = col_name_shortend if col_name_shortend != "user" else '"User"'
+        
+        if col_name_shortend in ("author", "user", "genre", "publisher") and not col_name == pk_name:
+            _as = col_name_shortend.capitalize() if col_name_shortend != "user" else "Borrower"
+
+            selections.append(f"{_col_name_shortend}.{col_name}")
+            selections.append(f"{_col_name_shortend}.name AS \"{_as}\"")
+
+            joins.append(f"LEFT JOIN {_col_name_shortend} ON {table}.{col_name} = {_col_name_shortend}.{col_name}")
+        else:
+            selections.append(f"{table}.{col_name}")
+
+    selection = ", ".join(selections)
+    join = " ".join(joins)
+
+    sql = f"SELECT {selection} FROM {table} {join} WHERE {pk_name} = {pk_value};"
+    print(sql)
+    return query(sql)
+
 @app.route('/api/update_description', methods=['POST'])
 def update_description():
     table = request.args.get("table").lower()
     pk_name = request.args.get("pk_name").lower()
     pk_value = int(request.args.get("pk_value"))
     description = request.get_json()
-    
+
     try:
         pk_value = int(request.args.get("pk_value"))
     except Exception as e:

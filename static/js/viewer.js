@@ -99,25 +99,21 @@ async function fetchGeminiDescription(entityName, table, pk_name, pk_value) {
 
 async function displayEntity(table, pk_name, pk_value) {
   try {
-    const url =
-      "/api/get_from_table?" +
+
+    const urll =
+      "/api/get_detail_view?" +
       new URLSearchParams({
         table: table,
         pk_name: pk_name,
         pk_value: pk_value,
       }).toString();
 
-    const response = await fetch(url);
+    const response = await fetch(urll);
     if (!response.ok) {
-      throw new Error("Failed to fetch data from server.");
+      throw new Error("TEST: Failed to fetch data from server.");
     }
 
     const data = await response.json();
-
-    if (!Array.isArray(data) || data.length === 0) {
-      document.getElementById("content").innerHTML = "<p>No entity found.</p>";
-      return;
-    }
 
     const entity = data[0];
     const entityType = table.charAt(0).toUpperCase() + table.slice(1);
@@ -125,22 +121,31 @@ async function displayEntity(table, pk_name, pk_value) {
     let entityName = "";
 
     for (const key in entity) {
-      if (!entity.hasOwnProperty(key)) continue;
-      if (key == 'description') continue;
-      const value = entity[key];
-      if (value == null) continue;
+        if (!entity.hasOwnProperty(key)) continue;
 
-      // Hyperlink related entities
-      if (key.endsWith("_id") && key !== pk_name) {
-        const relatedTable = key.replace("_id", "");
-        htmlContent += `<li><strong>${attribute_name_to_text(key)}:</strong> <a href="viewer.html?table=${relatedTable}&pk_name=${key}&pk_value=${value}">${value}</a></li>`;
-      } else {
-        htmlContent += `<li><strong>${attribute_name_to_text(key)}:</strong> ${value ?? "—"}</li>`;
-        if (["name", "title"].includes(key.toLowerCase())) {
-          entityName = value;
+        const value = entity[key];
+        if (value == null || key === 'description') continue;
+
+        // Check if the current field is a foreign key (e.g., author_id)
+        if (key.endsWith("_id") && key !== pk_name) {
+            const relatedTable = key.replace("_id", "");
+            const displayKey = get_display_name_key(relatedTable); // e.g. "Author" for author_id
+            const displayName = entity[displayKey];
+
+            const label = attribute_name_to_text(key);
+            const link = generate_viewer_link(relatedTable, key, value, displayName ?? value);
+            htmlContent += `<li><strong>${label}:</strong> ${link}</li>`;
+        } else if(key[0] !== key[0].toUpperCase()) {
+            console.log(key);
+            const label = attribute_name_to_text(key);
+            htmlContent += `<li><strong>${label}:</strong> ${value}</li>`;
+
+            if (["name", "title"].includes(key.toLowerCase())) {
+                entityName = value;
+            }
         }
-      }
     }
+
 
     htmlContent += "</ul>";
 
@@ -165,4 +170,15 @@ async function displayEntity(table, pk_name, pk_value) {
       "content"
     ).innerHTML = `<p>Error loading entity details.</p>`;
   }
+}
+
+
+function get_display_name_key(table) {
+  const map = {
+    author: "Author",
+    genre: "Genre",
+    publisher: "Publisher",
+    user: "Borrower"
+  };
+  return map[table] || table;
 }
