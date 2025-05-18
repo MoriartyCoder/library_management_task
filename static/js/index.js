@@ -1,14 +1,25 @@
 
+function generate_page() {
+    
+}
 
 window.onload = function () {
     Promise.all([
         fetch('/api/list').then(response => response.json()),
-        fetch('/api/books').then(response => response.json())
-    ]).then(([tableData, books]) => {
+        fetch('/api/users').then(response => response.json())
+    ]).then(([tableData, users]) => {
 
         const bookTable = document.getElementById('book-table');
         const borrowBookSelect = document.getElementById('borrowBookId');
+        const borrowerBookSelect = document.getElementById('borrowerId');
         const returnBookSelect = document.getElementById('returnBookId');
+
+        users.forEach(user => {
+            const option = document.createElement('option');
+            option.value = user.user_id;
+            option.textContent = `${user.name}`;
+            borrowerBookSelect.appendChild(option);
+        });
 
         // Clear existing options
         borrowBookSelect.innerHTML = '<option value="">Select a Book</option>';
@@ -18,27 +29,30 @@ window.onload = function () {
             const book_id = book["Book ID"];
             const title = book["Title"];
             const author = book["Author"];
+            const author_id = book["author_id"];
             const publisher = book["Publisher"];
+            const publisher_id = book["publisher_id"];
             const genre = book["Genre"];
+            const genre_id = book["genre_id"];
             const borrower = book["Borrower"] || '';
+            const user_id = book["user_id"];
             const borrowDate = book["Borrow Date"] || '';
             const returnDate = book["Return Date"] || '';
-            const state = book["State"];
-
-            const isBorrowed = borrower !== '' && borrowDate !== '';
+            const isBorrowed = borrowDate !== '';
+            const state = isBorrowed ? 'Borrowed' : 'Present';
 
             // Create table row
             const row = document.createElement('tr');
             row.setAttribute('book-id', book_id);
             row.innerHTML = `<td>${book_id}</td>
-                             <td><a href="viewer.html?table=book&id_name=book_id&id=${book_id}" target="_blank">${title}</td>
-                             <td><a href="viewer.html?table=book&id_name=book_id&id=${book_id}" target="_blank">${author}</td>
-                             <td><a href="viewer.html?table=publisher&id_name=book_id&id=${book_id}" target="_blank">${publisher}</td>
-                             <td><a href="viewer.html?table=genre&id_name=book_id&id=${book_id}" target="_blank">${genre}</td>
-                             <td><a href="viewer.html?table=book&id_name=book_id&id=${book_id}" target="_blank">${borrower}</td>
-                             <td>${borrowDate}</td>
-                             <td>${returnDate}</td>
-                             <td>${state}</td>`;
+                            <td><a href="viewer.html?table=Book&pk_name=book_id&pk_value=${book_id}" target="_blank">${title}</a></td>
+                            <td><a href="viewer.html?table=Author&pk_name=author_id&pk_value=${author_id}" target="_blank">${author}</a></td>
+                            <td><a href="viewer.html?table=Publisher&pk_name=publisher_id&pk_value=${publisher_id}" target="_blank">${publisher}</a></td>
+                            <td><a href="viewer.html?table=Genre&pk_name=genre_id&pk_value=${genre_id}" target="_blank">${genre}</a></td>
+                            <td>${borrower ? `<a href="viewer.html?table=User&pk_name=user_id&pk_value=${user_id}" target="_blank">${borrower}</a>` : ''}</td>
+                            <td>${borrowDate}</td>
+                            <td>${returnDate}</td>
+                            <td>${state}</td>`;
             bookTable.appendChild(row);
 
             // Populate dropdowns
@@ -61,10 +75,9 @@ window.onload = function () {
 document.getElementById('borrowForm').addEventListener('submit', function (event) {
     event.preventDefault();
     const bookId = document.getElementById('borrowBookId').value;
-    const borrowerName = document.getElementById('borrowerName').value.trim();
-    const borrowDate = document.getElementById('borrowDate').value;
+    const borrowerId = document.getElementById('borrowerId').value;
 
-    if (!bookId || !borrowerName || !borrowDate) {
+    if (!bookId || !borrowerId) {
         alert('Please fill in all fields.');
         return;
     }
@@ -74,64 +87,36 @@ document.getElementById('borrowForm').addEventListener('submit', function (event
         return;
     }
 
-    const row = document.querySelector(`#book-table tr[book-id="${bookId}"]`);
-    if (row) {
-        const currentState = row.cells[8].textContent;
-        if (currentState === 'Borrowed') {
-            alert('This book is already borrowed.');
-            return;
-        }
+    let url = '/api/borrow?' + new URLSearchParams({
+        user_id: borrowerId, 
+        book_id: bookId 
+    }).toString();
 
-        const returnDate = new Date(borrowDate);
-        returnDate.setMonth(returnDate.getMonth() + 3); // Set the return date 3 months later
-
-        // Update the table
-        row.cells[5].textContent = borrowerName;
-        row.cells[6].textContent = borrowDate;
-        row.cells[7].textContent = returnDate.toISOString().split('T')[0]; // Format the date as YYYY-MM-DD
-        row.cells[8].textContent = 'Borrowed';
-        row.classList.add('borrowed');
-
-        // Save borrowing details to LocalStorage
-        const borrowingData = JSON.parse(localStorage.getItem('borrowingData')) || {};
-        borrowingData[bookId] = {
-            borrowerName: borrowerName,
-            borrowDate: borrowDate,
-            returnDate: returnDate.toISOString().split('T')[0]
-        };
-        localStorage.setItem('borrowingData', JSON.stringify(borrowingData));
-
-        // Remove the borrowed book from Borrow Form dropdown
-        const borrowBookSelect = document.getElementById('borrowBookId');
-        const optionToRemove = borrowBookSelect.querySelector(`option[value="${bookId}"]`);
-        if (optionToRemove) {
-            optionToRemove.remove();
-        }
-
-        // Add the borrowed book to Return Form dropdown
-        const returnBookSelect = document.getElementById('returnBookId');
-        const newReturnOption = document.createElement('option');
-        newReturnOption.value = bookId;
-        newReturnOption.textContent = `${bookId} - ${row.cells[1].textContent}`;
-        returnBookSelect.appendChild(newReturnOption);
-
-        // Clear the form
-        document.getElementById('borrowForm').reset();
-
-        alert(`Book ID ${bookId} has been successfully borrowed.`);
-    } else {
-        alert('No book found with that ID.');
-    }
+    fetch(url, {
+            method: 'POST'
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error("Request failed");
+            }
+            return response.json();
+        })
+        .then(data => {
+            location.reload();
+        })
+        .catch(error => {
+            console.error('Error resetting borrowed books:', error);
+            alert("An error occurred while resetting.");
+        });
 });
 
 // Handle Return Form Submission
 document.getElementById('returnForm').addEventListener('submit', function (event) {
     event.preventDefault();
     const bookId = document.getElementById('returnBookId').value;
-    const returnDateInput = document.getElementById('returnDate').value;
 
-    if (!bookId || !returnDateInput) {
-        alert('Please fill in all fields.');
+    if (!bookId) {
+        alert('Please select a book to return.');
         return;
     }
 
@@ -140,57 +125,48 @@ document.getElementById('returnForm').addEventListener('submit', function (event
         return;
     }
 
-    const row = document.querySelector(`#book-table tr[book-id="${bookId}"]`);
-    if (row) {
-        const currentState = row.cells[8].textContent;
-        if (currentState !== 'Borrowed') {
-            alert('This book is not currently borrowed.');
-            return;
-        }
+    let url = '/api/return?' + new URLSearchParams({
+        book_id: bookId 
+    }).toString();
 
-        // Update the table to clear borrowing details
-        row.cells[5].textContent = '';
-        row.cells[6].textContent = '';
-        row.cells[7].textContent = '';
-        row.cells[8].textContent = 'Present';
-        row.classList.remove('borrowed');
+    fetch(url, {
+            method: 'POST'
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error("Request failed");
+            }
+            return response.json();
+        })
+        .then(data => {
+            location.reload();
+        })
+        .catch(error => {
+            console.error('Error resetting borrowed books:', error);
+            alert("An error occurred while resetting.");
+        });
 
-        // Update LocalStorage
-        const borrowingData = JSON.parse(localStorage.getItem('borrowingData')) || {};
-        if (borrowingData[bookId]) {
-            borrowingData[bookId].returnDate = returnDateInput; // Optionally update the return date
-            // Remove the entry to indicate the book is returned
-            delete borrowingData[bookId];
-            localStorage.setItem('borrowingData', JSON.stringify(borrowingData));
-        }
-
-        // Remove the returned book from Return Form dropdown
-        const returnBookSelect = document.getElementById('returnBookId');
-        const optionToRemove = returnBookSelect.querySelector(`option[value="${bookId}"]`);
-        if (optionToRemove) {
-            optionToRemove.remove();
-        }
-
-        // Add the returned book back to Borrow Form dropdown
-        const borrowBookSelect = document.getElementById('borrowBookId');
-        const newBorrowOption = document.createElement('option');
-        newBorrowOption.value = bookId;
-        newBorrowOption.textContent = `${bookId} - ${row.cells[1].textContent}`;
-        borrowBookSelect.appendChild(newBorrowOption);
-
-        // Clear the form
-        document.getElementById('returnForm').reset();
-
-        alert(`Book ID ${bookId} has been successfully returned.`);
-    } else {
-        alert('No book found with that ID.');
-    }
 });
 
-// Clear borrowing data from localStorage
+// Clear borrowing data from DB
 document.getElementById('clearDataBtn').addEventListener('click', function () {
     if (confirm('Are you sure you want to clear all borrowing data? This action cannot be undone.')) {
-        localStorage.removeItem('borrowingData'); // Only remove borrowing data
-        location.reload(); // Reload the page after clearing the data
+        fetch('/api/totalreset', {
+            method: 'POST'
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error("Request failed");
+            }
+            return response.json();
+        })
+        .then(data => {
+            alert(data.message);
+            location.reload(); // reload table data
+        })
+        .catch(error => {
+            console.error('Error resetting borrowed books:', error);
+            alert("An error occurred while resetting.");
+        });
     }
 });

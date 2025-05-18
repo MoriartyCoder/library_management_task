@@ -42,11 +42,11 @@
                         <!-- Options will be populated dynamically -->
                     </select>
 
-                    <label for="borrowerName">Borrower's Name:</label>
-                    <input type="text" id="borrowerName" required>
-
-                    <label for="borrowDate">Borrow Date:</label>
-                    <input type="date" id="borrowDate" required>
+                    <label for="borrowerId">Borrower:</label>
+                    <select id="borrowerId" required>
+                        <option value="">Select a Borrower</option>
+                        <!-- Options will be populated dynamically -->
+                    </select>
 
                     <button type="submit">Borrow Book</button>
                 </form>
@@ -61,9 +61,6 @@
                         <option value="">Select a Book</option>
                         <!-- Options will be populated dynamically -->
                     </select>
-
-                    <label for="returnDate">Return Date:</label>
-                    <input type="date" id="returnDate" required>
 
                     <button type="submit">Return Book</button>
                 </form>

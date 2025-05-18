@@ -1,3 +1,4 @@
+from datetime import date, timedelta
 from flask import Flask, render_template, jsonify, request
 import configparser
 import requests
@@ -5,7 +6,7 @@ import logging
 from flask_cors import CORS
 
 from psycopg2.extras import RealDictCursor
-from helper import query
+from helper import query, update_query
 
 app = Flask(__name__, static_url_path='/static', static_folder='static')
 CORS(app)
@@ -123,10 +124,87 @@ def get_description():
         logging.exception(f"Unexpected error: {e}")
         return jsonify({'error': 'An unexpected error occurred', 'message': str(e)}), 500
 
+TABLES = ("book", "genre", "author", "publisher", '"User"')
+TABLES_WITH_DESCRIPTION = ("book", "author") 
 
-@app.route('/api/books')
-def get_books():
-    return query("SELECT * FROM book;")
+@app.route('/api/users')
+def get_users():
+    return query('SELECT * FROM "User";')
+
+@app.route('/api/get_entire_table', methods=['GET'])
+def get_entire_table():
+    table = request.args.get("table")
+    return query(f"SELECT * FROM {table};")
+
+@app.route('/api/get_from_table', methods=['GET'])
+def get_from_table():
+    table = request.args.get("table").lower()
+    pk_name = request.args.get("pk_name").lower()
+    pk_value = int(request.args.get("pk_value"))
+    try:
+        pk_value = int(request.args.get("pk_value"))
+    except Exception as e:
+        return jsonify({'error': "The primary key must be an int!"}), 500
+
+    if table == "user":
+        table = '"User"'
+
+    if table not in TABLES:
+        return jsonify({'error': "Table not found!"}), 500
+    
+    sql = f"SELECT * FROM {table} WHERE {pk_name} = {pk_value};"
+    return query(sql)
+
+@app.route('/api/update_description', methods=['POST'])
+def update_description():
+    table = request.args.get("table").lower()
+    pk_name = request.args.get("pk_name").lower()
+    pk_value = int(request.args.get("pk_value"))
+    description = request.get_json()
+    
+    try:
+        pk_value = int(request.args.get("pk_value"))
+    except Exception as e:
+        return jsonify({'error': "The primary key must be an int!"}), 500
+
+    if table not in TABLES_WITH_DESCRIPTION:
+        return jsonify({'error': "Table not found!"}), 500
+
+    return update_query(f"""UPDATE {table} SET 
+                        description = '{description}'
+                        WHERE {pk_name} = {pk_value};
+                        """)
+
+@app.route('/api/borrow', methods=['POST'])
+def borrow_book():
+    try:
+        user_id = request.args.get("user_id")
+        book_id = request.args.get("book_id")
+        borrow_date = date.today()
+        due_date = borrow_date + timedelta(days=14)
+    except Exception as e:
+        return jsonify({'error': "Failed to finish the peperations."}), 500
+    
+    return update_query(f"""UPDATE Book SET 
+                        user_id = {user_id}, 
+                        borrow_date = '{borrow_date}', 
+                        due_date = '{due_date}' 
+                        WHERE book_id = {book_id};
+                        """)
+
+@app.route('/api/return', methods=['POST'])
+def return_book():
+    try:
+        book_id = request.args.get("book_id")
+    except Exception as e:
+        return jsonify({'error': "Failed to finish the peperations."}), 500
+    
+    return update_query(f"""UPDATE Book SET 
+                        user_id = null, 
+                        borrow_date = null, 
+                        due_date = null 
+                        WHERE book_id = {book_id};
+                        """)
 
 @app.route('/api/list')
 def get_book_table_list():
@@ -142,19 +220,21 @@ def get_book_table_list():
                     g.name AS "Genre",
                     u.user_id,
                     u.name AS "Borrower",
-                    br.borrow_date AS "Borrow Date",
-                    br.due_date AS "Return Date",
-                    s.name AS "State"
+                    b.borrow_date AS "Borrow Date",
+                    b.due_date AS "Return Date"
                     FROM Book b
                     JOIN Author a ON b.author_id = a.author_id
                     JOIN Publisher p ON b.publisher_id = p.publisher_id
                     JOIN Genre g ON b.genre_id = g.genre_id
-                    JOIN State s ON b.state_id = s.state_id
-                    LEFT JOIN Borrowed br ON b.book_id = br.book_id
-                    LEFT JOIN "User" u ON br.user_id = u.user_id
+                    LEFT JOIN "User" u ON b.user_id = u.user_id
                     ORDER BY b.book_id;
                     """)
 
+@app.route('/api/totalreset', methods=['POST'])
+def reset_all_borrowed_books():
+    return update_query("""UPDATE Book SET user_id = null, borrow_date = null, due_date = null;""",
+                        'All borrowed books reset.',
+                        'Failed to reset borrowed books')
 
 
 if __name__ == '__main__':
