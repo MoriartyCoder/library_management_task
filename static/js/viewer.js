@@ -24,7 +24,8 @@ function attribute_name_to_text(attribute_name) {
         genre_id: "Genre",
         publisher_id: "Publisher",
         title: "Title",
-        user_id: "Borrower"
+        user_id: "Borrower",
+        name: "Name"
     }
 
     return mapping[attribute_name] || "UNKOWN";
@@ -87,10 +88,6 @@ async function fetchGeminiDescription(entityName, table, pk_name, pk_value) {
         body: JSON.stringify(descriptionHTML)
     });
 
-    const json = await res.json();
-    if (json.success) alert('Saved!');
-    else alert('Error: ' + json.error);
-
   } catch (error) {
     console.error("Error fetching description from Gemini API:", error);
     document.getElementById("description").innerHTML = `<p>${error.message}</p>`;
@@ -114,7 +111,7 @@ async function displayEntity(table, pk_name, pk_value) {
     }
 
     const data = await response.json();
-
+    console.log(data);
     const entity = data[0];
     const entityType = table.charAt(0).toUpperCase() + table.slice(1);
     let htmlContent = `<h1>${entityType} Details</h1><ul>`;
@@ -126,10 +123,9 @@ async function displayEntity(table, pk_name, pk_value) {
         const value = entity[key];
         if (value == null || key === 'description') continue;
 
-        // Check if the current field is a foreign key (e.g., author_id)
         if (key.endsWith("_id") && key !== pk_name) {
             const relatedTable = key.replace("_id", "");
-            const displayKey = get_display_name_key(relatedTable); // e.g. "Author" for author_id
+            const displayKey = get_display_name_key(relatedTable);
             const displayName = entity[displayKey];
 
             const label = attribute_name_to_text(key);
@@ -156,13 +152,13 @@ async function displayEntity(table, pk_name, pk_value) {
     htmlContent += `<a href="/" class="back-link">&larr; Back to Catalog</a>`;
     document.getElementById("content").innerHTML = htmlContent;
 
-    if (entity.description == null) {
-      fetchGeminiDescription(entityName, table, pk_name, pk_value);
-    } else {
-        document.getElementById("description").innerHTML = `<h2>Description</h2>${entity.description}`;
+    if ('description' in entity) {
+        if (entity.description == null) {
+            fetchGeminiDescription(entityName, table, pk_name, pk_value);
+        } else {
+            document.getElementById("description").innerHTML = `<h2>Description</h2>${entity.description}`;
+        }
     }
-
-
 
   } catch (error) {
     console.error("Error displaying entity:", error);

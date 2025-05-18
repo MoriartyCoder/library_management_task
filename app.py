@@ -125,7 +125,7 @@ def get_description():
         return jsonify({'error': 'An unexpected error occurred', 'message': str(e)}), 500
 
 TABLES = ("book", "genre", "author", "publisher", '"User"')
-TABLES_WITH_DESCRIPTION = ("book", "author") 
+TABLES_WITH_DESCRIPTION = ("book", "genre", "author", "publisher") 
 
 @app.route('/api/users')
 def get_users():
@@ -179,6 +179,7 @@ def get_detail_view():
             """
 
     table_cols = query(sql)
+    print(sql)
 
     selections = []
     joins = []
@@ -197,11 +198,11 @@ def get_detail_view():
         else:
             selections.append(f"{table}.{col_name}")
 
-    selection = ", ".join(selections)
+    
+    selection = ", ".join(selections) if len(selections) else "*"
     join = " ".join(joins)
 
     sql = f"SELECT {selection} FROM {table} {join} WHERE {pk_name} = {pk_value};"
-    print(sql)
     return query(sql)
 
 @app.route('/api/update_description', methods=['POST'])

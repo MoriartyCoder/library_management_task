@@ -1,4 +1,29 @@
 
+# Setup
+## Compose container
+```
+docker-compose up -d --build
+```
+## Enter container
+```
+docker exec -it pg-cont bash
+```
+
+## Move
+```
+cd /root/db_files
+```
+
+## Read setup
+```
+psql -U admin -d lib_mgmt -f setup.sql
+```
+
+## Start app
+```
+python app.py
+```
+
 # Docker
 
 ## Compose container
