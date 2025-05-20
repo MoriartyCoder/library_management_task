@@ -1,18 +1,25 @@
+function transform_date(dict, key) {
+    if(!(key in dict)) {
+        return '';
+    } 
+
+    return new Date(dict[key]["$date"]).toLocaleDateString('de-DE') || '';
+}
+
 window.onload = function () {
   const params = getQueryParams();
-  const table = params["table"];
-  const pk_name = params["pk_name"];
-  const pk_value = params["pk_value"];
+  const collection = params["collection"];
+  const id = params["id"];
 
-  if (table && pk_name && pk_value) {
-    displayEntity(table, pk_name, pk_value);
+  if (collection && id) {
+    displayEntity(collection, id);
   } else {
     document.getElementById("content").innerHTML = "<p>Invalid parameters.</p>";
   }
 };
 
-function generate_viewer_link(table, pk_name, pk_value, text) {
-    return `<a href="viewer.html?table=${table}&pk_name=${pk_name}&pk_value=${pk_value}" target="_blank">${text}</a>`;
+function generate_viewer_link(collection, id, text) {
+    return `<a href="viewer.html?collection=${collection}&id=${id}" target="_blank">${text}</a>`;
 }
 
 function attribute_name_to_text(attribute_name) {
@@ -45,7 +52,7 @@ function getQueryParams() {
   return params;
 }
 
-async function fetchGeminiDescription(entityName, table, pk_name, pk_value) {
+async function fetchGeminiDescription(entityName, collection, id) {
   console.log("Fetching description for:", entityName);
   try {
     const response = await fetch(
@@ -77,11 +84,11 @@ async function fetchGeminiDescription(entityName, table, pk_name, pk_value) {
     const url =
       "/api/update_description?" +
       new URLSearchParams({
-        table: table,
-        pk_name: pk_name,
-        pk_value: pk_value,
+        collection: collection, 
+        id: id
       }).toString();
-
+    
+    console.log("URL: " + url);
     const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -94,15 +101,14 @@ async function fetchGeminiDescription(entityName, table, pk_name, pk_value) {
   }
 }
 
-async function displayEntity(table, pk_name, pk_value) {
+async function displayEntity(collection, id) {
   try {
 
     const urll =
       "/api/get_detail_view?" +
       new URLSearchParams({
-        table: table,
-        pk_name: pk_name,
-        pk_value: pk_value,
+        collection: collection,
+        id: id,
       }).toString();
 
     const response = await fetch(urll);
@@ -111,9 +117,8 @@ async function displayEntity(table, pk_name, pk_value) {
     }
 
     const data = await response.json();
-    console.log(data);
     const entity = data[0];
-    const entityType = table.charAt(0).toUpperCase() + table.slice(1);
+    const entityType = collection.charAt(0).toUpperCase() + collection.slice(1);
     let htmlContent = `<h1>${entityType} Details</h1><ul>`;
     let entityName = "";
 
@@ -123,38 +128,41 @@ async function displayEntity(table, pk_name, pk_value) {
         const value = entity[key];
         if (value == null || key === 'description') continue;
 
-        if (key.endsWith("_id") && key !== pk_name) {
-            const relatedTable = key.replace("_id", "");
-            const displayKey = get_display_name_key(relatedTable);
+        if (key.endsWith("_id") && key !== "_id") {
+            const relatedCollection = key.replace("_id", "");
+            const displayKey = get_display_name_key(relatedCollection).
+                              split('_')
+                              .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+                              .join(' ');;
+                        
             const displayName = entity[displayKey];
-
             const label = attribute_name_to_text(key);
-            const link = generate_viewer_link(relatedTable, key, value, displayName ?? value);
+            const link = generate_viewer_link(relatedCollection, value, displayName ?? value);
             htmlContent += `<li><strong>${label}:</strong> ${link}</li>`;
         } else if(key[0] !== key[0].toUpperCase()) {
-            console.log(key);
             const label = attribute_name_to_text(key);
-            htmlContent += `<li><strong>${label}:</strong> ${value}</li>`;
+            const showValue = key.search("_date") >= 0 ? transform_date(entity, key) : value;
 
+            htmlContent += `<li><strong>${label}:</strong> ${showValue}</li>`;
             if (["name", "title"].includes(key.toLowerCase())) {
                 entityName = value;
             }
         }
     }
 
-
     htmlContent += "</ul>";
 
-    if (table.toLowerCase() === "book" && !entity["user_id"]) {
+    if (collection.toLowerCase() === "book" && !entity["user_id"]) {
       htmlContent += `<p>This book is currently available for borrowing.</p>`;
     }
 
     htmlContent += `<a href="/" class="back-link">&larr; Back to Catalog</a>`;
     document.getElementById("content").innerHTML = htmlContent;
-
-    if ('description' in entity) {
+    
+    if ('user' !== collection) {
+      
         if (entity.description == null) {
-            fetchGeminiDescription(entityName, table, pk_name, pk_value);
+            fetchGeminiDescription(entityName, collection, id);
         } else {
             document.getElementById("description").innerHTML = `<h2>Description</h2>${entity.description}`;
         }
@@ -171,10 +179,10 @@ async function displayEntity(table, pk_name, pk_value) {
 
 function get_display_name_key(table) {
   const map = {
-    author: "Author",
-    genre: "Genre",
-    publisher: "Publisher",
-    user: "Borrower"
+    author_id: "Author",
+    genre_id: "Genre",
+    publisher_id: "Publisher",
+    user_id: "Borrower"
   };
   return map[table] || table;
 }

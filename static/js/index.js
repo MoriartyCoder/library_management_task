@@ -1,6 +1,10 @@
 
-function generate_page() {
-    
+function transform_date(dict, key) {
+    if(!(key in dict)) {
+        return '';
+    } 
+
+    return new Date(dict[key]["$date"]).toLocaleDateString('de-DE') || '';
 }
 
 window.onload = function () {
@@ -16,7 +20,7 @@ window.onload = function () {
 
         users.forEach(user => {
             const option = document.createElement('option');
-            option.value = user.user_id;
+            option.value = user._id;
             option.textContent = `${user.name}`;
             borrowerBookSelect.appendChild(option);
         });
@@ -36,8 +40,8 @@ window.onload = function () {
             const genre_id = book["genre_id"];
             const borrower = book["Borrower"] || '';
             const user_id = book["user_id"];
-            const borrowDate = book["Borrow Date"] || '';
-            const returnDate = book["Return Date"] || '';
+            const borrowDate = transform_date(book, "Borrow Date");
+            const returnDate = transform_date(book, "Return Date");
             const isBorrowed = borrowDate !== '';
             const state = isBorrowed ? 'Borrowed' : 'Present';
 
@@ -45,11 +49,11 @@ window.onload = function () {
             const row = document.createElement('tr');
             row.setAttribute('book-id', book_id);
             row.innerHTML = `<td>${book_id}</td>
-                            <td><a href="viewer.html?table=Book&pk_name=book_id&pk_value=${book_id}" target="_blank">${title}</a></td>
-                            <td><a href="viewer.html?table=Author&pk_name=author_id&pk_value=${author_id}" target="_blank">${author}</a></td>
-                            <td><a href="viewer.html?table=Publisher&pk_name=publisher_id&pk_value=${publisher_id}" target="_blank">${publisher}</a></td>
-                            <td><a href="viewer.html?table=Genre&pk_name=genre_id&pk_value=${genre_id}" target="_blank">${genre}</a></td>
-                            <td>${borrower ? `<a href="viewer.html?table=User&pk_name=user_id&pk_value=${user_id}" target="_blank">${borrower}</a>` : ''}</td>
+                            <td><a href="viewer.html?collection=book&id=${book_id}" target="_blank">${title}</a></td>
+                            <td><a href="viewer.html?collection=author&id=${author_id}" target="_blank">${author}</a></td>
+                            <td><a href="viewer.html?collection=publisher&id=${publisher_id}" target="_blank">${publisher}</a></td>
+                            <td><a href="viewer.html?collection=genre&id=${genre_id}" target="_blank">${genre}</a></td>
+                            <td>${borrower ? `<a href="viewer.html?collection=user&id=${user_id}" target="_blank">${borrower}</a>` : ''}</td>
                             <td>${borrowDate}</td>
                             <td>${returnDate}</td>
                             <td>${state}</td>`;
@@ -97,6 +101,7 @@ document.getElementById('borrowForm').addEventListener('submit', function (event
         })
         .then(response => {
             if (!response.ok) {
+                console.log(response.status);
                 throw new Error("Request failed");
             }
             return response.json();

@@ -1,20 +1,18 @@
 services:
-  postgres:
-    container_name: pg-cont
-    image: postgres
+  mongo:
+    container_name: mongo-cont
+    image: mongo
     hostname: localhost
-    ports: 
-      - "5400:5432"
+    ports:
+      - "27017:27017"
     environment:
-      POSTGRES_USER: admin
-      POSTGRES_PASSWORD: 1234
-      POSTGRES_DB: lib_mgmt
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: 1234
+      MONGO_INITDB_DATABASE: lib_mgmt
     volumes:
       - ./db_files:/root/db_files
-      - postgres_data:/var/lib/postgresql/data
+      - mongo_data:/data/db
     restart: unless-stopped
 
-
 volumes:
-  postgres_data:
-
+  mongo_data:

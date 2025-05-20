@@ -1,19 +1,19 @@
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from flask import Flask, render_template, jsonify, request
 import configparser
 import requests
 import logging
 from flask_cors import CORS
-
-from psycopg2.extras import RealDictCursor
-from helper import query, update_query
+from bson import json_util
+from flask import Response
+from helper import get_db_connection
 
 app = Flask(__name__, static_url_path='/static', static_folder='static')
 CORS(app)
 
 # Configure logging to DEBUG level for detailed logs
 logging.basicConfig(
-    level=logging.DEBUG,  # Changed from INFO to DEBUG
+    level=logging.WARNING,  # Changed from INFO to DEBUG
     format='%(asctime)s %(levelname)s %(message)s',
     handlers=[
         logging.StreamHandler(),
@@ -124,167 +124,235 @@ def get_description():
         logging.exception(f"Unexpected error: {e}")
         return jsonify({'error': 'An unexpected error occurred', 'message': str(e)}), 500
 
-TABLES = ("book", "genre", "author", "publisher", '"User"')
-TABLES_WITH_DESCRIPTION = ("book", "genre", "author", "publisher") 
+COLLECTIONS = ("book", "genre", "author", "publisher", "user")
+COLLECTIONS_WITH_DESCRIPTION = ("book", "genre", "author", "publisher") 
 
 @app.route('/api/users')
 def get_users():
-    return query('SELECT * FROM "User";')
-
-@app.route('/api/get_entire_table', methods=['GET'])
-def get_entire_table():
-    table = request.args.get("table")
-    return query(f"SELECT * FROM {table};")
-
-@app.route('/api/get_from_table', methods=['GET'])
-def get_from_table():
-    table = request.args.get("table").lower()
-    pk_name = request.args.get("pk_name").lower()
-    pk_value = int(request.args.get("pk_value"))
-    try:
-        pk_value = int(request.args.get("pk_value"))
-    except Exception as e:
-        return jsonify({'error': "The primary key must be an int!"}), 500
-
-    if table == "user":
-        table = '"User"'
-
-    if table not in TABLES:
-        return jsonify({'error': "Table not found!"}), 500
-    
-    sql = f"SELECT * FROM {table} WHERE {pk_name} = {pk_value};"
-    return query(sql)
+    conn, db = get_db_connection()
+    col = db["user"]
+    users = list(col.find())
+    conn.close()
+    return Response(json_util.dumps(users), mimetype='application/json')
 
 @app.route('/api/get_detail_view', methods=['GET'])
 def get_detail_view():
-    table = request.args.get("table").lower()
-    pk_name = request.args.get("pk_name").lower()
-    pk_value = int(request.args.get("pk_value"))
     try:
-        pk_value = int(request.args.get("pk_value"))
+        collection_name = request.args.get("collection").lower()
+        id = int(request.args.get("id"))
     except Exception as e:
         return jsonify({'error': "The primary key must be an int!"}), 500
 
-    if table == "user":
-        table = '"User"'
-
-    if table not in TABLES:
+    if collection_name not in COLLECTIONS:
         return jsonify({'error': "Table not found!"}), 500
     
-    sql = f"""
-            SELECT column_name
-            FROM information_schema.columns
-            WHERE table_name = '{table}'
-            AND table_schema = 'public';
-            """
+    conn, db = get_db_connection()
+    collection = db[collection_name]
+    attribute_names = [c for c in collection.find_one({"_id": id})]
 
-    table_cols = query(sql)
-    print(sql)
+    pipeline = []
+    pipeline.append({
+        "$match": {
+            "_id": id
+        }
+    })
 
-    selections = []
-    joins = []
-    for col in table_cols:
-        col_name = col["column_name"]
-        col_name_shortend = col_name.replace("_id", "")
-        _col_name_shortend = col_name_shortend if col_name_shortend != "user" else '"User"'
+    projection = {"_id": 0}
+    for attribute_name in attribute_names:
+        if attribute_name == "_id":
+            continue
+        is_id = "_id" in attribute_name
+
+        if is_id:
+            other_collection_name = attribute_name.replace("_id", "")
+            pipeline.append({
+                "$lookup": {
+                    "from": other_collection_name,
+                    "localField": attribute_name,
+                    "foreignField": "_id",
+                    "as": other_collection_name
+                }
+            })
+            pipeline.append({"$unwind": f"${other_collection_name}"})
         
-        if col_name_shortend in ("author", "user", "genre", "publisher") and not col_name == pk_name:
-            _as = col_name_shortend.capitalize() if col_name_shortend != "user" else "Borrower"
-
-            selections.append(f"{_col_name_shortend}.{col_name}")
-            selections.append(f"{_col_name_shortend}.name AS \"{_as}\"")
-
-            joins.append(f"LEFT JOIN {_col_name_shortend} ON {table}.{col_name} = {_col_name_shortend}.{col_name}")
+            projection[attribute_name] = f"${other_collection_name}._id"
+            projection[attribute_name.replace("_id", "").capitalize()] = f"${other_collection_name}.name"
         else:
-            selections.append(f"{table}.{col_name}")
+            projection[attribute_name] = f"${attribute_name}"
 
-    
-    selection = ", ".join(selections) if len(selections) else "*"
-    join = " ".join(joins)
+    pipeline.append({
+        "$project": projection
+    })
 
-    sql = f"SELECT {selection} FROM {table} {join} WHERE {pk_name} = {pk_value};"
-    return query(sql)
+    cursor = collection.aggregate(pipeline)
+    data = list(cursor)
+    conn.close()
+    return Response(json_util.dumps(data), mimetype='application/json')
 
 @app.route('/api/update_description', methods=['POST'])
 def update_description():
-    table = request.args.get("table").lower()
-    pk_name = request.args.get("pk_name").lower()
-    pk_value = int(request.args.get("pk_value"))
+    collection_name = request.args.get("collection").lower()
     description = request.get_json()
-
     try:
-        pk_value = int(request.args.get("pk_value"))
+        id = int(request.args.get("id"))
     except Exception as e:
         return jsonify({'error': "The primary key must be an int!"}), 500
 
-    if table not in TABLES_WITH_DESCRIPTION:
+    if collection_name not in COLLECTIONS_WITH_DESCRIPTION:
         return jsonify({'error': "Table not found!"}), 500
 
-    return update_query(f"""UPDATE {table} SET 
-                        description = '{description}'
-                        WHERE {pk_name} = {pk_value};
-                        """)
+    conn, db = get_db_connection()
+    db[collection_name].update_one(
+        {"_id": id},
+        {
+            "$set": {
+                "description": description
+        }
+    })
+    
+    conn.close()
+    return jsonify({'message': 'Success'}), 200
 
 @app.route('/api/borrow', methods=['POST'])
 def borrow_book():
     try:
-        user_id = request.args.get("user_id")
-        book_id = request.args.get("book_id")
-        borrow_date = date.today()
+        user_id = int(request.args.get("user_id"))
+        book_id = int(request.args.get("book_id"))
+        borrow_date = datetime.utcnow()
         due_date = borrow_date + timedelta(days=14)
     except Exception as e:
-        return jsonify({'error': "Failed to finish the peperations."}), 500
+        return jsonify({'error': "Failed to finish the preparations."}), 500
     
-    return update_query(f"""UPDATE Book SET 
-                        user_id = {user_id}, 
-                        borrow_date = '{borrow_date}', 
-                        due_date = '{due_date}' 
-                        WHERE book_id = {book_id};
-                        """)
+    conn, db = get_db_connection()
+    db.book.update_one(
+        {"_id": book_id},
+        {
+            "$set": {
+                "user_id": user_id,
+                "borrow_date": borrow_date,
+                "due_date": due_date
+        }
+    })
+    conn.close()
+    return jsonify({'message': 'Success'}), 200
 
 @app.route('/api/return', methods=['POST'])
 def return_book():
     try:
-        book_id = request.args.get("book_id")
+        book_id = int(request.args.get("book_id"))
     except Exception as e:
-        return jsonify({'error': "Failed to finish the peperations."}), 500
+        return jsonify({'error': "Failed to finish the preparations."}), 500
     
-    return update_query(f"""UPDATE Book SET 
-                        user_id = null, 
-                        borrow_date = null, 
-                        due_date = null 
-                        WHERE book_id = {book_id};
-                        """)
+    conn, db = get_db_connection()
+    db.book.update_one(
+        {"_id": book_id},
+        {
+            "$unset": {
+                "user_id": "",
+                "borrow_date": "",
+                "due_date": ""
+        }
+    })
+    conn.close()
+    return jsonify({'message': 'Success'}), 200
 
 @app.route('/api/list')
 def get_book_table_list():
-    return query("""SELECT
-                    b.book_id AS "Book ID",
-                    b.book_id,
-                    b.title AS "Title",
-                    a.author_id,
-                    a.name AS "Author",
-                    p.publisher_id,
-                    p.name AS "Publisher",
-                    g.genre_id,
-                    g.name AS "Genre",
-                    u.user_id,
-                    u.name AS "Borrower",
-                    b.borrow_date AS "Borrow Date",
-                    b.due_date AS "Return Date"
-                    FROM Book b
-                    JOIN Author a ON b.author_id = a.author_id
-                    JOIN Publisher p ON b.publisher_id = p.publisher_id
-                    JOIN Genre g ON b.genre_id = g.genre_id
-                    LEFT JOIN "User" u ON b.user_id = u.user_id
-                    ORDER BY b.book_id;
-                    """)
+    conn, db = get_db_connection()
+    cursor = db.book.aggregate([
+    # Join Author
+    {
+        "$lookup": {
+            "from": "author",
+            "localField": "author_id",
+            "foreignField": "_id",
+            "as": "author"
+        }
+    },
+    { "$unwind": "$author" },
+
+    # Join Publisher
+    {
+        "$lookup": {
+            "from": "publisher",
+            "localField": "publisher_id",
+            "foreignField": "_id",
+            "as": "publisher"
+        }
+    },
+    { "$unwind": "$publisher" },
+
+    # Join Genre
+    {
+        "$lookup": {
+            "from": "genre",
+            "localField": "genre_id",
+            "foreignField": "_id",
+            "as": "genre"
+        }
+    },
+    { "$unwind": "$genre" },
+
+    # Optional User (LEFT JOIN)
+    {
+        "$lookup": {
+            "from": "user",
+            "localField": "user_id",
+            "foreignField": "_id",
+            "as": "user"
+        }
+    },
+    {
+        "$unwind": {
+            "path": "$user",
+            "preserveNullAndEmptyArrays": True
+        }
+    },
+
+    # Final projection
+    {
+        "$project": {
+            "_id": 0,
+            "Book ID": "$_id",
+            "book_id": "$_id",
+            "Title": "$title",
+            "author_id": "$author._id",
+            "Author": "$author.name",
+            "publisher_id": "$publisher._id",
+            "Publisher": "$publisher.name",
+            "genre_id": "$genre._id",
+            "Genre": "$genre.name",
+            "user_id": "$user._id",
+            "Borrower": "$user.name",
+            "Borrow Date": "$borrow_date",
+            "borrow_date": "$borrow_date",
+            "Return Date": "$due_date",
+            "due_date": "$due_date"
+        }
+    },
+
+    # Order by book_id
+    { "$sort": { "book_id": 1 } }
+    ])
+
+    data = list(cursor)
+    conn.close()
+    return Response(json_util.dumps(data), mimetype='application/json')
 
 @app.route('/api/totalreset', methods=['POST'])
 def reset_all_borrowed_books():
-    return update_query("""UPDATE Book SET user_id = null, borrow_date = null, due_date = null;""",
-                        'All borrowed books reset.',
-                        'Failed to reset borrowed books')
+    conn, db = get_db_connection()
+    db.book.update_many(
+        {},
+        {
+            "$unset": {
+                "user_id": "",
+                "borrow_date": "",
+                "due_date": ""
+        }
+    })
+    conn.close()
+    return jsonify({'message': 'Success'}), 200
 
 
 if __name__ == '__main__':

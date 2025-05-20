@@ -6,7 +6,7 @@ docker-compose up -d --build
 ```
 ## Enter container
 ```
-docker exec -it pg-cont bash
+docker exec -it mongo-cont bash
 ```
 
 ## Move
@@ -16,7 +16,7 @@ cd /root/db_files
 
 ## Read setup
 ```
-psql -U admin -d lib_mgmt -f setup.sql
+mongosh lib_mgmt --authenticationDatabase "admin" -u "admin" -p 1234 /root/db_files/setup.js
 ```
 
 ## Start app
@@ -32,20 +32,26 @@ docker-compose up -d --build
 ```
 
 ## Enter container
+### MongoDB-Shell
 ```
-docker exec -it pg-cont bash
+docker exec -it mongo-cont mongosh
+```
+
+### MongoDB-Shell
+```
+docker exec -it mongo-cont bash
 ```
 
 ## Stop container
 ```
-docker stop pg-cont
+docker stop mongo-cont
 ```
 
 ## Remove container and volume
 ```
-docker rm pg-cont; docker volume rm db_files_postgres_data
+docker rm mongo-cont; docker volume rm library_management_task_mongo_data
 ```
-### Remove while shutdown
+### Remove while shutdown (with data -v)
 ```
 docker-compose down -v
 ```
@@ -60,18 +66,18 @@ docker ps --all
 docker volume ls
 ```
 
-# Postgres
+# Mongo DB
 
-## Read sql-file
+## Load setup data (from outside of the container)
 
 ```
-psql -U <user> -d <DB> -f <file>
+docker exec -it mongo-cont mongosh lib_mgmt --authenticationDatabase "admin" -u "admin" -p 1234 /root/db_files/setup.js
 ```
 
-### Read setup
-```
-psql -U admin -d lib_mgmt -f setup.sql
-```
+## Load setup data (from inside of the container)
 
+```
+mongosh lib_mgmt --authenticationDatabase "admin" -u "admin" -p 1234 /root/db_files/setup.js
+```
 
 
